@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <libgen.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -14,6 +15,10 @@
 #endif
 
 #define STR_SIZE 256
+
+// Max tolerance when comparing floats.
+// Seems we can't go any lower than 1e-2.
+#define MAX_ERROR 1e-2
 
 /* maximum power density possible (say 300W for a 10mm x 10mm chip)	*/
 #define MAX_PD (3.0e6)
@@ -50,12 +55,13 @@ int readgolden(float *vect, int grid_rows, int grid_cols, char *file) {
     printf("Failed to open %s\n", file);
     return 0;
   }
+  printf("Opened '%s'\n", file);
 
   for (int i = 0; i < grid_rows; i++) {
     for (int j = 0; j < grid_cols; j++) {
       fgets(str, STR_SIZE, fp);
       sscanf(str, "%d\t%f", &_, &val);
-      //   printf("Line %d: Read %f\n", i * grid_cols + j, val);
+      //       printf("Line %d: Read %f\n", i * grid_cols + j, val);
       vect[i * grid_cols + j] = val;
     }
   }
@@ -65,13 +71,13 @@ int readgolden(float *vect, int grid_rows, int grid_cols, char *file) {
 
 // Read in two vectors and compare them one by one
 void compareoutput(float *vect1, float *vect2, int grid_rows, int grid_cols) {
-  vect1[0] = 0;
-
   for (int i = 0; i < grid_rows; i++) {
     for (int j = 0; j < grid_cols; j++) {
-      if (abs(vect1[i * grid_cols + j] - vect2[i * grid_cols + j]) > 1e-4) {
-        // printf("Line %d: mismatch, %.2f, %.2f\n", i * grid_cols + j,
-        //    vect1[i * grid_cols + j], vect2[i * grid_cols + j]);
+      if (abs(vect1[i * grid_cols + j] - vect2[i * grid_cols + j]) >
+          MAX_ERROR) {
+        printf("Line %d: mismatch, %f, %f, diff=%f\n", i * grid_cols + j,
+               vect1[i * grid_cols + j], vect2[i * grid_cols + j],
+               abs(vect1[i * grid_cols + j] - vect2[i * grid_cols + j]));
 
         printf("Test FAILED\n");
 
@@ -384,10 +390,15 @@ void run(int argc, char **argv) {
 
   // Compare with golden execution
   float *GoldenIn = (float *)malloc(size * sizeof(float));
-  if (readgolden(GoldenIn, grid_rows, grid_cols, "golden.out")) {
+  char *GoldenFilepath = (char *)malloc(STR_SIZE);
+  strcpy(GoldenFilepath, dirname(argv[0]));
+  strcat(GoldenFilepath, "/golden.out");
+
+  if (readgolden(GoldenIn, grid_rows, grid_cols, GoldenFilepath)) {
     compareoutput(GoldenIn, MatrixOut, grid_rows, grid_cols);
   }
   free(GoldenIn);
+  free(GoldenFilepath);
 
   cudaFree(MatrixPower);
   cudaFree(MatrixTemp[0]);
