@@ -40,6 +40,50 @@ void run(int argc, char **argv);
 
 void fatal(char *s) { fprintf(stderr, "error: %s\n", s); }
 
+int readgolden(float *vect, int grid_rows, int grid_cols, char *file) {
+  FILE *fp;
+  float val;
+  int _;
+  char str[STR_SIZE];
+  fp = fopen(file, "r");
+  if (fp == 0) {
+    printf("Failed to open %s\n", file);
+    return 0;
+  }
+
+  for (int i = 0; i < grid_rows; i++) {
+    for (int j = 0; j < grid_cols; j++) {
+      fgets(str, STR_SIZE, fp);
+      sscanf(str, "%d\t%f", &_, &val);
+      //   printf("Line %d: Read %f\n", i * grid_cols + j, val);
+      vect[i * grid_cols + j] = val;
+    }
+  }
+  fclose(fp);
+  return 1;
+}
+
+// Read in two vectors and compare them one by one
+void compareoutput(float *vect1, float *vect2, int grid_rows, int grid_cols) {
+  vect1[0] = 0;
+
+  for (int i = 0; i < grid_rows; i++) {
+    for (int j = 0; j < grid_cols; j++) {
+      if (abs(vect1[i * grid_cols + j] - vect2[i * grid_cols + j]) > 1e-4) {
+        // printf("Line %d: mismatch, %.2f, %.2f\n", i * grid_cols + j,
+        //    vect1[i * grid_cols + j], vect2[i * grid_cols + j]);
+
+        printf("Test FAILED\n");
+
+        goto exit;
+      }
+    }
+  }
+  printf("Test PASSED\n");
+exit:
+  return;
+}
+
 void writeoutput(float *vect, int grid_rows, int grid_cols, char *file) {
   int i, j, index = 0;
   FILE *fp;
@@ -337,6 +381,13 @@ void run(int argc, char **argv) {
              cudaMemcpyDeviceToHost);
 
   writeoutput(MatrixOut, grid_rows, grid_cols, ofile);
+
+  // Compare with golden execution
+  float *GoldenIn = (float *)malloc(size * sizeof(float));
+  if (readgolden(GoldenIn, grid_rows, grid_cols, "golden.out")) {
+    compareoutput(GoldenIn, MatrixOut, grid_rows, grid_cols);
+  }
+  free(GoldenIn);
 
   cudaFree(MatrixPower);
   cudaFree(MatrixTemp[0]);
